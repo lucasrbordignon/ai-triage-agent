@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "rootDir": "src",
+    "rootDirs": ["./src", "../../packages/shared/src"],
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@repo/shared": ["../../packages/shared/src"]
+    },
+  },
+  "references": [
+    { "path": "../../packages/shared" }
+  ],
+}

@@ -1,4 +1,4 @@
 export interface SendMessageDTO {
-  sessionId: string;
-  message: string;
+  conversationId: string;
+  content: string;
 }

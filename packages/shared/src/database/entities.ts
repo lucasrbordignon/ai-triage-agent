@@ -13,6 +13,5 @@ export interface Message {
   conversation_id: string;
   role: MessageRole;
   content: string;
-  intent?: string;
   created_at: string;
 }

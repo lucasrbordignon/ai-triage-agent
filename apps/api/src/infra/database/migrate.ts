@@ -15,7 +15,6 @@ export async function runMigrations() {
       conversation_id TEXT NOT NULL,
       role            TEXT NOT NULL,
       content         TEXT NOT NULL,
-      intent          TEXT,
       created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id)
     );

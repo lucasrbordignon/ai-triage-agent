@@ -236,6 +236,32 @@ O banco nunca é instanciado nos testes — garante velocidade e isolamento real
 
 ---
 
+## 🔐 Segurança
+
+### Rate Limiting
+As rotas `/messages` aceitam no máximo **10 requisições por minuto** por IP.
+Excedido o limite, a API retorna `429 Too Many Requests`.
+
+### API Key
+Todas as rotas protegidas exigem o header `x-api-key`.
+Sem a chave ou com chave inválida, a API retorna `401 Unauthorized`.
+
+Configure no `.env` de `apps/api`:
+```env
+API_KEY=sua-chave-secreta-aqui
+```
+
+E no `.env` de `apps/web`:
+```env
+VITE_API_KEY=sua-chave-secreta-aqui
+```
+
+### Proteção contra Prompt Injection
+Inputs do usuário são sanitizados antes de chegar ao agente,
+removendo tags e instruções maliciosas como `[admin]`, `[system]` e similares.
+
+---
+
 ## 🚀 Como executar o projeto
 
 ### 1️⃣ Instalar dependências
@@ -322,8 +348,10 @@ OLLAMA_HOST=http://localhost:11434
 | Código | Situação                                  |
 |--------|-------------------------------------------|
 | 400    | Dados inválidos (Zod)                     |
+| 401    | API key ausente ou inválida               |
 | 404    | Conversa não encontrada                   |
 | 409    | Conversa já transferida                   |
+| 429    | Rate limit excedido                       |
 | 500    | Erro interno ou agente indisponível       |
 
 ---

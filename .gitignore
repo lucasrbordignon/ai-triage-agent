@@ -32,4 +32,4 @@ docker-data/
 .ollama/
 *.local
 *.pid
-*.db
+apps/api/data/

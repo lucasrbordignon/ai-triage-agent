@@ -52,9 +52,11 @@ Frontend (React)
    ↓
 API REST (Express)
    ↓
-Chat Service
+ChatController (Zod validation)
    ↓
-AI Agent Service
+ChatService (orquestração)
+   ↓
+AgentService
    ↓
 LLM (Ollama - local)
 ```
@@ -85,6 +87,8 @@ Stack:
 * Node.js + Express 5
 * TypeScript
 * libsql (SQLite via `@libsql/client`)
+* Zod (validação de entrada)
+* Ollama (LLM local)
 * Vitest (testes unitários)
 
 ### Estrutura de camadas
@@ -97,8 +101,13 @@ apps/api/src/
 │   └── chat/
 │       ├── conversation/
 │       │   └── repository/   → ConversationRepository
-│       └── message/
-│           └── repository/   → MessageRepository
+│       ├── message/
+│       │   └── repository/   → MessageRepository
+│       ├── controller/
+│       │   └── chat.controller.ts
+│       └── service/
+│           ├── chat.service.ts
+│           └── agent.service.ts
 ├── app.ts
 ├── routes.ts
 └── server.ts
@@ -138,7 +147,7 @@ Stack:
 * Vite 7
 * TypeScript
 * Axios
-* TanStack Query
+* Tailwind CSS
 
 ### Comunicação com API
 
@@ -152,18 +161,18 @@ Isso evita problemas de CORS e simula ambiente de produção.
 
 ---
 
-## 🤖 Agente de IA (Design)
+## 🤖 Agente de IA
 
 O agente segue o padrão **AI Agent Orchestration**, separado do controller HTTP.
 
-Fluxo planejado:
+Fluxo:
 
 ```
 Mensagem do usuário
    ↓
 Histórico da conversa (contexto)
    ↓
-Classificação de intenção via LLM
+Classificação de intenção via LLM (llama3.2)
    ↓
 Geração de resposta ao cliente
    ↓
@@ -184,7 +193,7 @@ Intenções suportadas:
 ```typescript
 // Entrada
 interface SendMessageDTO {
-  conversationId: string;
+  conversationId?: string | null;
   content: string;
 }
 
@@ -202,18 +211,28 @@ interface AgentResponse {
 
 ## 🧪 Testes
 
-Testes unitários com **Vitest**, isolando o banco de dados via mocks.
+Testes unitários com **Vitest**.
 
 ```bash
+# rodar testes
 pnpm --filter api test
+
+# com cobertura
+pnpm --filter api test:coverage
 ```
 
 Cobertura atual:
 
 * `ConversationRepository` — create, findById, updateStatus
 * `MessageRepository` — create, listByConversation
+* `ChatService` — sendMessage, getHistory, todos os erros e fluxo de transferência
 
-O banco nunca é tocado nos testes — o módulo `infra/database` é mockado via `vi.mock`.
+Estratégia de isolamento:
+
+* **Repositories** — banco mockado via `vi.mock` no módulo `infra/database`
+* **ChatService** — dependências injetadas diretamente no construtor, sem `vi.mock`
+
+O banco nunca é instanciado nos testes — garante velocidade e isolamento real.
 
 ---
 
@@ -225,7 +244,17 @@ O banco nunca é tocado nos testes — o módulo `infra/database` é mockado via
 pnpm install
 ```
 
-### 2️⃣ Rodar backend
+### 2️⃣ Instalar e iniciar o Ollama
+
+```bash
+# baixar o modelo
+ollama pull llama3.2
+
+# iniciar o servidor
+ollama serve
+```
+
+### 3️⃣ Rodar backend
 
 ```bash
 pnpm --filter api dev
@@ -233,7 +262,7 @@ pnpm --filter api dev
 
 API disponível em `http://localhost:3000`
 
-### 3️⃣ Rodar frontend
+### 4️⃣ Rodar frontend
 
 ```bash
 pnpm --filter web dev
@@ -243,13 +272,24 @@ Frontend disponível em `http://localhost:5173`
 
 ---
 
+## 🔐 Variáveis de Ambiente
+
+Crie um arquivo `.env` em `apps/api`:
+
+```env
+PORT=3000
+OLLAMA_HOST=http://localhost:11434
+```
+
+---
+
 ## 📡 Rotas da API
 
-| Método | Rota       | Descrição                              |
-|--------|------------|----------------------------------------|
-| GET    | /api/health | Health check                          |
-| POST   | /messages  | Envia mensagem e recebe resposta da IA |
-| GET    | /messages  | Retorna histórico de uma conversa      |
+| Método | Rota            | Descrição                              |
+|--------|-----------------|----------------------------------------|
+| GET    | /api/health     | Health check                           |
+| POST   | /messages       | Envia mensagem e recebe resposta da IA |
+| GET    | /messages       | Retorna histórico de uma conversa      |
 
 ### POST /messages
 
@@ -263,7 +303,8 @@ Frontend disponível em `http://localhost:5173`
 // Response
 {
   "message": "Com certeza! Você tem o CPF em mãos?",
-  "transfer": false
+  "transfer": false,
+  "conversationId": "3d1d9356-76e3-4254-9b4f-8864991c061c"
 }
 ```
 
@@ -275,6 +316,15 @@ Frontend disponível em `http://localhost:5173`
   { "id": 2, "role": "assistant", "content": "Olá! Como posso ajudar?", "created_at": "..." }
 ]
 ```
+
+### Erros
+
+| Código | Situação                                  |
+|--------|-------------------------------------------|
+| 400    | Dados inválidos (Zod)                     |
+| 404    | Conversa não encontrada                   |
+| 409    | Conversa já transferida                   |
+| 500    | Erro interno ou agente indisponível       |
 
 ---
 
@@ -295,6 +345,15 @@ Evita CORS em desenvolvimento e mantém URLs relativas independentes do ambiente
 ### IA desacoplada
 O `agent.service.ts` não depende da camada HTTP, permitindo futura integração com WebSocket, WhatsApp, filas ou workers.
 
+### Validação com Zod
+Todas as entradas HTTP são validadas com esquemas Zod antes de chegar no service, retornando erros descritivos com status 400.
+
+### Erros semânticos com ChatServiceError
+Erros de negócio usam `ChatServiceError` com `code` identificável, permitindo respostas HTTP precisas (404, 409, 500) no controller.
+
+### Injeção de dependência no ChatService
+O `ChatService` recebe repositories e agente pelo construtor, facilitando testes sem necessidade de `vi.mock` nos módulos.
+
 ### Testes com mock de banco
 O banco nunca é instanciado nos testes unitários — garante velocidade e isolamento real.
 
@@ -304,16 +363,16 @@ O banco nunca é instanciado nos testes unitários — garante velocidade e isol
 
 * [x] Monorepo configurado (PNPM Workspaces)
 * [x] Backend Express funcional
-* [x] Frontend React inicializado
+* [x] Frontend React com chat funcional
 * [x] Tipos e contratos compartilhados (`packages/shared`)
 * [x] Banco de dados SQLite com migrations
 * [x] `ConversationRepository` implementado e testado
 * [x] `MessageRepository` implementado e testado
-* [x] Testes unitários com Vitest (mock de banco)
-* [x] `ChatService` — orquestração do fluxo
-* [x] `AgentService` — integração com Ollama
+* [x] `ChatService` implementado e testado
+* [x] `AgentService` com Ollama (llama3.2)
 * [x] Endpoints `POST /messages` e `GET /messages`
-* [x] Classificação de intenção e transferência
-* [ ] Ollama rodando (local ou VPS)
-* [ ] Frontend com chat funcional
+* [x] Validação de entrada com Zod
+* [x] Tratamento de erros com códigos semânticos
+* [x] Classificação de intenção e transferência automática
+* [x] Testes unitários com Vitest (20 testes)
 * [ ] Docker

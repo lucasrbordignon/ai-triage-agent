@@ -70,17 +70,11 @@ Foi adotado **PNPM Workspaces** para:
 * Garantir tipagem consistente da API
 * Simular estrutura usada em ambientes SaaS reais
 
-Pacote compartilhado:
+Pacote compartilhado (`packages/shared`) contém:
 
-```
-packages/shared
-```
-
-Contém:
-
-* DTOs
-* Enums
-* Tipos de resposta do agente
+* DTOs (`SendMessageDTO`, `AgentResponse`)
+* Enums (`Department`, `ConversationStatus`, `MessageRole`)
+* Entidades (`Conversation`, `Message`)
 
 ---
 
@@ -88,18 +82,63 @@ Contém:
 
 Stack:
 
-* Node.js
-* Express
+* Node.js + Express 5
 * TypeScript
+* libsql (SQLite via `@libsql/client`)
+* Vitest (testes unitários)
+
+### Estrutura de camadas
+
+```
+apps/api/src/
+├── infra/
+│   └── database/         → Conexão e migrations SQLite
+├── modules/
+│   └── chat/
+│       ├── conversation/
+│       │   └── repository/   → ConversationRepository
+│       └── message/
+│           └── repository/   → MessageRepository
+├── app.ts
+├── routes.ts
+└── server.ts
+```
+
+### Banco de dados
+
+Utiliza **SQLite** via `@libsql/client`. As tabelas são:
+
+**conversations**
+
+| Campo        | Tipo    | Descrição                              |
+|--------------|---------|----------------------------------------|
+| id           | TEXT    | UUID gerado no backend                 |
+| status       | TEXT    | `ACTIVE`, `TRANSFERRED`, `CLOSED`      |
+| department   | TEXT    | `VENDAS`, `SUPORTE`, `FINANCEIRO`      |
+| created_at   | TEXT    | ISO timestamp                          |
+| updated_at   | TEXT    | ISO timestamp                          |
+
+**messages**
+
+| Campo           | Tipo    | Descrição                        |
+|-----------------|---------|----------------------------------|
+| id              | INTEGER | Auto increment                   |
+| conversation_id | TEXT    | FK → conversations.id            |
+| role            | TEXT    | `user` ou `assistant`            |
+| content         | TEXT    | Conteúdo da mensagem             |
+| created_at      | TEXT    | ISO timestamp                    |
+
+---
 
 ## 💻 Frontend
 
 Stack:
 
-* React
-* Vite
+* React 19
+* Vite 7
 * TypeScript
 * Axios
+* TanStack Query
 
 ### Comunicação com API
 
@@ -120,23 +159,61 @@ O agente segue o padrão **AI Agent Orchestration**, separado do controller HTTP
 Fluxo planejado:
 
 ```
-Mensagem
+Mensagem do usuário
    ↓
-Classificação de intenção
+Histórico da conversa (contexto)
    ↓
-Geração de resposta
+Classificação de intenção via LLM
    ↓
-Resumo para atendente
+Geração de resposta ao cliente
    ↓
-Transferência de setor
+Resumo para o atendente humano
+   ↓
+Transferência de setor + encerramento
 ```
 
 Intenções suportadas:
 
-* `VENDAS`
-* `SUPORTE`
-* `FINANCEIRO`
-* `FORA_CONTEXTO`
+* `VENDAS` — compra, dúvidas sobre produto ou preços
+* `SUPORTE` — reclamações, atraso, erros com produto
+* `FINANCEIRO` — pagamento, estorno, nota fiscal
+* `FORA_CONTEXTO` — bloqueado, IA responde que não tem autorização
+
+### Contratos do Agente
+
+```typescript
+// Entrada
+interface SendMessageDTO {
+  conversationId: string;
+  content: string;
+}
+
+// Saída
+interface AgentResponse {
+  message: string;
+  transfer?: boolean;
+  department?: Department;
+  summary?: string;
+  conversationId?: string;
+}
+```
+
+---
+
+## 🧪 Testes
+
+Testes unitários com **Vitest**, isolando o banco de dados via mocks.
+
+```bash
+pnpm --filter api test
+```
+
+Cobertura atual:
+
+* `ConversationRepository` — create, findById, updateStatus
+* `MessageRepository` — create, listByConversation
+
+O banco nunca é tocado nos testes — o módulo `infra/database` é mockado via `vi.mock`.
 
 ---
 
@@ -144,13 +221,9 @@ Intenções suportadas:
 
 ### 1️⃣ Instalar dependências
 
-Na raiz:
-
 ```bash
 pnpm install
 ```
-
----
 
 ### 2️⃣ Rodar backend
 
@@ -158,13 +231,7 @@ pnpm install
 pnpm --filter api dev
 ```
 
-API disponível em:
-
-```
-http://localhost:3000
-```
-
----
+API disponível em `http://localhost:3000`
 
 ### 3️⃣ Rodar frontend
 
@@ -172,70 +239,81 @@ http://localhost:3000
 pnpm --filter web dev
 ```
 
-Frontend:
-
-```
-http://localhost:5173
-```
+Frontend disponível em `http://localhost:5173`
 
 ---
 
-## 📡 Health Check
+## 📡 Rotas da API
 
-```
-GET /api/health
-```
+| Método | Rota       | Descrição                              |
+|--------|------------|----------------------------------------|
+| GET    | /api/health | Health check                          |
+| POST   | /messages  | Envia mensagem e recebe resposta da IA |
+| GET    | /messages  | Retorna histórico de uma conversa      |
 
-Resposta:
+### POST /messages
 
 ```json
+// Request
 {
-  "status": "ok"
+  "conversationId": "uuid-ou-null",
+  "content": "Gostaria de pagar meu boleto"
 }
+
+// Response
+{
+  "message": "Com certeza! Você tem o CPF em mãos?",
+  "transfer": false
+}
+```
+
+### GET /messages?conversationId=xxx
+
+```json
+[
+  { "id": 1, "role": "user", "content": "Olá", "created_at": "..." },
+  { "id": 2, "role": "assistant", "content": "Olá! Como posso ajudar?", "created_at": "..." }
+]
 ```
 
 ---
 
 ## 🧩 Decisões Técnicas
 
-### Monorepo
+### Monorepo com PNPM Workspaces
+Permite compartilhamento de contratos tipados entre aplicações sem duplicação.
 
-Permite compartilhamento de contratos tipados entre aplicações.
+### SQLite via libsql
+Leve, sem dependência de servidor, ideal para o escopo do projeto. Fácil migração para Turso em produção.
+
+### Repositórios isolados
+Cada entidade tem seu próprio repository, sem acoplamento entre si. O service orquestra os dois.
 
 ### Proxy do Vite
-
-Evita CORS e mantém URLs independentes do ambiente.
+Evita CORS em desenvolvimento e mantém URLs relativas independentes do ambiente.
 
 ### IA desacoplada
+O `agent.service.ts` não depende da camada HTTP, permitindo futura integração com WebSocket, WhatsApp, filas ou workers.
 
-O agente não depende da camada HTTP, permitindo futura integração com:
-
-* WhatsApp
-* WebSocket
-* Filas
-* Workers
+### Testes com mock de banco
+O banco nunca é instanciado nos testes unitários — garante velocidade e isolamento real.
 
 ---
-
-## 🔮 Próximos Passos
-
-* Integração com Ollama (LLM local)
-* Classificador de intenção
-* Persistência em banco (SQLite)
-* Histórico de conversa
-* Transferência automática
-* Resumo para atendente humano
-
----
-
 
 ## ✅ Status Atual
 
-* [x] Monorepo configurado
+* [x] Monorepo configurado (PNPM Workspaces)
 * [x] Backend Express funcional
 * [x] Frontend React inicializado
-* [x] Tipos compartilhados
-* [ ] Endpoint de mensagens
-* [ ] Integração com IA
-* [ ] Classificação de intenção
-* [ ] Persistência
+* [x] Tipos e contratos compartilhados (`packages/shared`)
+* [x] Banco de dados SQLite com migrations
+* [x] `ConversationRepository` implementado e testado
+* [x] `MessageRepository` implementado e testado
+* [x] Testes unitários com Vitest (mock de banco)
+* [x] `ChatService` — orquestração do fluxo
+* [x] `AgentService` — integração com Ollama
+* [x] Endpoints `POST /messages` e `GET /messages`
+* [x] Classificação de intenção e transferência
+* [ ] Ollama rodando (local ou VPS)
+* [ ] Frontend com chat funcional
+* [ ] Docker

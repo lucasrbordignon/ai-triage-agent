@@ -17,6 +17,14 @@ const getHistorySchema = z.object({
     .uuid('conversationId deve ser um UUID válido')
 })
 
+function sanitizeInput(content: string): string {
+  return content
+    .replace(/\[.*?\]/g, '')
+    .replace(/disregard.*?instructions/gi, '')
+    .replace(/ignore.*?prompt/gi, '')
+    .trim()
+}
+
 export class ChatController {
   constructor(private readonly chatService = new ChatService()) {}
 
@@ -32,7 +40,11 @@ export class ChatController {
     }
 
     try {
-      const response = await this.chatService.sendMessage(parsed.data)
+      const sanitized = {
+        ...parsed.data,
+        content: sanitizeInput(parsed.data.content)
+      }
+      const response = await this.chatService.sendMessage(sanitized)
       res.json(response)
     } catch (err) {
       console.error('[ChatController] sendMessage error:', err)

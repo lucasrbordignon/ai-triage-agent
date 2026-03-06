@@ -1,4 +1,5 @@
 import './infra/database'
+import "dotenv/config";
 import app from './app'
 import { initDatabase } from './infra/database'
 

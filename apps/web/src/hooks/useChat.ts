@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { api } from "../services/api";
 import type { AgentResponse } from "@repo/shared";
 
@@ -15,30 +15,7 @@ export function useChat() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTransferred, setIsTransferred] = useState(false);
-  const initialized = useRef(false);
   
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
-    const savedId = sessionStorage.getItem("conversationId");
-    if (!savedId) return;
-
-    setConversationId(savedId);
-    api
-      .get<ChatMessage[]>(`/messages?conversationId=${savedId}`)
-      .then((res) => {
-        const history: ChatMessage[] = res.data.map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        }));
-        setMessages(history);
-      })
-      .catch(() => {
-        sessionStorage.removeItem("conversationId");
-      });
-  }, []);
-
   const sendMessage = async (content: string) => {
     if (!content.trim() || isLoading || isTransferred) return;
 
@@ -60,7 +37,6 @@ export function useChat() {
 
       if (newId && !conversationId) {
         setConversationId(newId);
-        sessionStorage.setItem("conversationId", newId);
       }
 
       const assistantMessage: ChatMessage = {
@@ -93,7 +69,6 @@ export function useChat() {
     setMessages([]);
     setConversationId(null);
     setIsTransferred(false);
-    sessionStorage.removeItem("conversationId");
   };
 
   return { messages, isLoading, isTransferred, sendMessage, reset };

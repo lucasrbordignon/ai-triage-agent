@@ -29,7 +29,6 @@ tmp/
 temp/
 .cache/
 docker-data/
-.ollama/
 *.local
 *.pid
 apps/api/data/

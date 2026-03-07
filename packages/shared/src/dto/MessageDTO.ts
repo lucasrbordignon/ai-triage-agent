@@ -1,4 +1,4 @@
 export interface SendMessageDTO {
-  conversationId: string;
-  content: string;
+  conversationId?: string | null | undefined;
+  content: string
 }

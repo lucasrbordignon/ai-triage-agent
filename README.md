@@ -1,6 +1,6 @@
-# AI Triage Agent
+# AI Triage Agent — ImóvelPrime
 
-Sistema full-stack que implementa um **Agente de Triagem Inteligente com IA**, capaz de conversar com usuários, identificar a intenção do atendimento e encaminhar automaticamente para o setor correto.
+Sistema full-stack que implementa a **Sofia**, agente virtual de triagem inteligente da ImóvelPrime, capaz de conversar com clientes, identificar a intenção do atendimento e encaminhar automaticamente para o setor correto.
 
 ---
 
@@ -18,7 +18,7 @@ Construir um sistema simples composto por:
   * Suporte
   * Financeiro
 
-O agente atua como uma primeira camada de atendimento antes da transferência para um humano.
+A Sofia atua como uma primeira camada de atendimento antes da transferência para um humano.
 
 ---
 
@@ -52,13 +52,13 @@ Frontend (React)
    ↓
 API REST (Express)
    ↓
-ChatController (Zod validation)
+ChatController (Zod validation + sanitização)
    ↓
 ChatService (orquestração)
    ↓
 AgentService
    ↓
-LLM (Ollama - local)
+LLM (Groq — llama-3.1-8b-instant)
 ```
 
 ---
@@ -88,7 +88,7 @@ Stack:
 * TypeScript
 * libsql (SQLite via `@libsql/client`)
 * Zod (validação de entrada)
-* Ollama (LLM local)
+* Groq SDK (LLM em nuvem)
 * Vitest (testes unitários)
 
 ### Estrutura de camadas
@@ -96,7 +96,8 @@ Stack:
 ```
 apps/api/src/
 ├── infra/
-│   └── database/         → Conexão e migrations SQLite
+│   ├── database/         → Conexão e migrations SQLite
+│   └── middleware/       → API key authentication
 ├── modules/
 │   └── chat/
 │       ├── conversation/
@@ -161,20 +162,22 @@ Isso evita problemas de CORS e simula ambiente de produção.
 
 ---
 
-## 🤖 Agente de IA
+## 🤖 Agente de IA — Sofia
 
-O agente segue o padrão **AI Agent Orchestration**, separado do controller HTTP.
+A Sofia é o agente virtual da ImóvelPrime. Ela segue o padrão **AI Agent Orchestration**, separado do controller HTTP.
 
 Fluxo:
 
 ```
-Mensagem do usuário
+Mensagem do cliente
    ↓
-Histórico da conversa (contexto)
+Sanitização de input (proteção contra prompt injection)
    ↓
-Classificação de intenção via LLM (llama3.2)
+Histórico da conversa (últimas 4 mensagens)
    ↓
-Geração de resposta ao cliente
+Classificação de intenção via LLM (Groq — llama-3.1-8b-instant)
+   ↓
+Coleta de dados (nome + CPF/CNPJ)
    ↓
 Resumo para o atendente humano
    ↓
@@ -183,10 +186,10 @@ Transferência de setor + encerramento
 
 Intenções suportadas:
 
-* `VENDAS` — compra, dúvidas sobre produto ou preços
-* `SUPORTE` — reclamações, atraso, erros com produto
-* `FINANCEIRO` — pagamento, estorno, nota fiscal
-* `FORA_CONTEXTO` — bloqueado, IA responde que não tem autorização
+* `VENDAS` — compra, venda, aluguel de imóveis, financiamento, lançamentos
+* `SUPORTE` — problemas com contrato, manutenção (elétrica, hidráulica, portão, chaves), vistoria, acesso ao portal
+* `FINANCEIRO` — boleto, IPTU, condomínio, nota fiscal, reembolso, cobrança indevida
+* `FORA_CONTEXTO` — assuntos não relacionados a imóveis são redirecionados com tom amigável
 
 ### Contratos do Agente
 
@@ -257,8 +260,7 @@ VITE_API_KEY=sua-chave-secreta-aqui
 ```
 
 ### Proteção contra Prompt Injection
-Inputs do usuário são sanitizados antes de chegar ao agente,
-removendo tags e instruções maliciosas como `[admin]`, `[system]` e similares.
+Inputs do usuário são sanitizados antes de chegar ao agente, removendo tags e instruções maliciosas como `[admin]`, `[system]` e similares. O system prompt da Sofia também instrui o modelo a ignorar tentativas de manipulação.
 
 ---
 
@@ -270,14 +272,18 @@ removendo tags e instruções maliciosas como `[admin]`, `[system]` e similares.
 pnpm install
 ```
 
-### 2️⃣ Instalar e iniciar o Ollama
+### 2️⃣ Configurar variáveis de ambiente
 
-```bash
-# baixar o modelo
-ollama pull llama3.2
+Crie `apps/api/.env`:
+```env
+PORT=3000
+GROQ_API_KEY=gsk_...
+API_KEY=sua-chave-secreta-aqui
+```
 
-# iniciar o servidor
-ollama serve
+Crie `apps/web/.env`:
+```env
+VITE_API_KEY=sua-chave-secreta-aqui
 ```
 
 ### 3️⃣ Rodar backend
@@ -295,17 +301,6 @@ pnpm --filter web dev
 ```
 
 Frontend disponível em `http://localhost:5173`
-
----
-
-## 🔐 Variáveis de Ambiente
-
-Crie um arquivo `.env` em `apps/api`:
-
-```env
-PORT=3000
-OLLAMA_HOST=http://localhost:11434
-```
 
 ---
 
@@ -328,7 +323,7 @@ OLLAMA_HOST=http://localhost:11434
 
 // Response
 {
-  "message": "Com certeza! Você tem o CPF em mãos?",
+  "message": "Claro! Vou te encaminhar para o Financeiro. Qual é o seu nome completo?",
   "transfer": false,
   "conversationId": "3d1d9356-76e3-4254-9b4f-8864991c061c"
 }
@@ -339,7 +334,7 @@ OLLAMA_HOST=http://localhost:11434
 ```json
 [
   { "id": 1, "role": "user", "content": "Olá", "created_at": "..." },
-  { "id": 2, "role": "assistant", "content": "Olá! Como posso ajudar?", "created_at": "..." }
+  { "id": 2, "role": "assistant", "content": "Olá! Sou a Sofia...", "created_at": "..." }
 ]
 ```
 
@@ -364,6 +359,9 @@ Permite compartilhamento de contratos tipados entre aplicações sem duplicaçã
 ### SQLite via libsql
 Leve, sem dependência de servidor, ideal para o escopo do projeto. Fácil migração para Turso em produção.
 
+### Groq como provedor de LLM
+O Groq oferece inferência extremamente rápida (< 1s) com modelos open-source como `llama-3.1-8b-instant`. Free tier generoso (30 RPM), sem necessidade de infraestrutura local. O `AgentService` é desacoplado do provedor — trocar para OpenAI, Gemini ou Ollama exige mudança apenas nessa classe.
+
 ### Repositórios isolados
 Cada entidade tem seu próprio repository, sem acoplamento entre si. O service orquestra os dois.
 
@@ -382,8 +380,8 @@ Erros de negócio usam `ChatServiceError` com `code` identificável, permitindo 
 ### Injeção de dependência no ChatService
 O `ChatService` recebe repositories e agente pelo construtor, facilitando testes sem necessidade de `vi.mock` nos módulos.
 
-### Testes com mock de banco
-O banco nunca é instanciado nos testes unitários — garante velocidade e isolamento real.
+### Contexto limitado a 4 mensagens
+Modelos menores perdem coerência com histórico longo. O `formatHistory` envia apenas as últimas 4 mensagens ao agente, garantindo respostas consistentes sem alucinações.
 
 ---
 
@@ -397,10 +395,15 @@ O banco nunca é instanciado nos testes unitários — garante velocidade e isol
 * [x] `ConversationRepository` implementado e testado
 * [x] `MessageRepository` implementado e testado
 * [x] `ChatService` implementado e testado
-* [x] `AgentService` com Ollama (llama3.2)
+* [x] `AgentService` com Groq (llama-3.1-8b-instant)
 * [x] Endpoints `POST /messages` e `GET /messages`
 * [x] Validação de entrada com Zod
 * [x] Tratamento de erros com códigos semânticos
 * [x] Classificação de intenção e transferência automática
+* [x] Agente personalizado como Sofia — ImóvelPrime
+* [x] Suporte a problemas de manutenção do imóvel (elétrica, hidráulica, portão etc.)
 * [x] Testes unitários com Vitest (20 testes)
+* [x] Rate limiting (10 req/min por IP)
+* [x] Autenticação por API key
+* [x] Proteção contra prompt injection
 * [ ] Docker

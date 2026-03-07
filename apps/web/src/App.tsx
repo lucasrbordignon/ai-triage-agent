@@ -86,7 +86,7 @@ export default function ChatApp() {
             } animate-fade-in`}
           >
             <span className="text-xs text-zinc-600 px-1">
-              {msg.role === "user" ? "Você" : "Assistente"}
+              {msg.role === "user" ? "Você" : "Sofia"}
             </span>
 
             <div

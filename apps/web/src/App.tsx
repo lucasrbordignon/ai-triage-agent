@@ -19,11 +19,9 @@ export default function ChatApp() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Scroll automático + foco no input após resposta do agente
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
 
-    // Só foca se a última mensagem for do agente e não estiver carregando
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.role === "assistant" && !isLoading) {
       setTimeout(() => {

@@ -29,7 +29,6 @@ export class ChatService {
   async sendMessage(
     dto: SendMessageDTO
   ): Promise<AgentResponse & { conversationId: string }> {
-    // 1. Busca ou cria conversa
     let conversation = dto.conversationId
       ? await this.conversationRepo.findById(dto.conversationId)
       : null
@@ -45,7 +44,6 @@ export class ChatService {
       conversation = await this.conversationRepo.create()
     }
 
-    // 2. Bloqueia envio em conversa já transferida
     if (conversation.status === ConversationStatus.TRANSFERRED) {
       throw new ChatServiceError(
         'Esta conversa já foi transferida para um atendente humano.',
@@ -53,18 +51,15 @@ export class ChatService {
       )
     }
 
-    // 3. Salva mensagem do usuário
     await this.messageRepo.create({
       conversationId: conversation.id,
       role: MessageRole.USER,
       content: dto.content || ''
     })
 
-    // 4. Busca histórico para contexto da IA
     const history = await this.messageRepo.listByConversation(conversation.id)
-    const formattedHistory = this.formatHistory(history, dto.content || '')
+    const formattedHistory = this.formatHistory(history)
 
-    // 5. Chama o agente
     let agentResponse: AgentResponse
 
     try {
@@ -80,7 +75,6 @@ export class ChatService {
       )
     }
 
-    // 6. Garante que a resposta tem conteúdo
     if (!agentResponse.message) {
       throw new ChatServiceError(
         'O agente retornou uma resposta inválida.',
@@ -88,14 +82,12 @@ export class ChatService {
       )
     }
 
-    // 7. Salva resposta da IA
     await this.messageRepo.create({
       conversationId: conversation.id,
       role: MessageRole.ASSISTANT,
       content: agentResponse.message
     })
 
-    // 8. Se transferiu, atualiza status da conversa
     if (agentResponse.transfer && agentResponse.department) {
       await this.conversationRepo.updateStatus(
         conversation.id,
@@ -122,10 +114,10 @@ export class ChatService {
     return this.messageRepo.listByConversation(conversationId)
   }
 
-  private formatHistory(messages: Message[], currentMessage: string) {
+  private formatHistory(messages: Message[]) {
     return messages
-      .filter((m) => m.content !== currentMessage)
-      .slice(-6)
+      .slice(0, -1)
+      .slice(-4)
       .map((m) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content

@@ -5,7 +5,7 @@ import { apiKeyMiddleware } from "./infra/middleware/apiKey.middleware";
 
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 10, 
+  max: 20, 
   message: { error: "Muitas requisições. Tente novamente em 1 minuto." },
   standardHeaders: true,
   legacyHeaders: false,

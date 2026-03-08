@@ -14,8 +14,7 @@ COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
 ARG VITE_API_KEY
 ENV VITE_API_KEY=$VITE_API_KEY
-RUN pnpm --filter shared build
-RUN pnpm --filter web build
+RUN pnpm --filter web... build
 
 FROM nginx:alpine AS runner
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html

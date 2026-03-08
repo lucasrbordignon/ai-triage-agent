@@ -12,8 +12,7 @@ FROM deps AS builder
 WORKDIR /app
 COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
-RUN pnpm --filter shared build
-RUN pnpm --filter api build
+RUN pnpm --filter api... build
 
 FROM node:20-alpine AS runner
 RUN npm install -g pnpm
@@ -25,7 +24,7 @@ COPY apps/api/package.json ./apps/api/
 
 RUN pnpm install --frozen-lockfile --prod
 
-COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
 WORKDIR /app/apps/api

@@ -2,6 +2,8 @@
 
 Sistema full-stack que implementa a **Sofia**, agente virtual de triagem inteligente da ImóvelPrime, capaz de conversar com clientes, identificar a intenção do atendimento e encaminhar automaticamente para o setor correto.
 
+🔗 **Demo:** https://sofia.lrb.dev.br
+
 ---
 
 ## 🎯 Objetivo
@@ -25,7 +27,6 @@ A Sofia atua como uma primeira camada de atendimento antes da transferência par
 ## 🏗️ Arquitetura do Projeto
 
 O projeto foi estruturado como **monorepo**, permitindo compartilhamento de tipos e contratos entre frontend e backend.
-
 ```
 ai-triage-agent/
 │
@@ -44,7 +45,6 @@ ai-triage-agent/
 ## 🧠 Visão Arquitetural
 
 Fluxo geral:
-
 ```
 Usuário
    ↓
@@ -92,7 +92,6 @@ Stack:
 * Vitest (testes unitários)
 
 ### Estrutura de camadas
-
 ```
 apps/api/src/
 ├── infra/
@@ -153,7 +152,6 @@ Stack:
 ### Comunicação com API
 
 O frontend utiliza proxy do Vite:
-
 ```
 /api → http://localhost:3000
 ```
@@ -167,7 +165,6 @@ Isso evita problemas de CORS e simula ambiente de produção.
 A Sofia é o agente virtual da ImóvelPrime. Ela segue o padrão **AI Agent Orchestration**, separado do controller HTTP.
 
 Fluxo:
-
 ```
 Mensagem do cliente
    ↓
@@ -192,7 +189,6 @@ Intenções suportadas:
 * `FORA_CONTEXTO` — assuntos não relacionados a imóveis são redirecionados com tom amigável
 
 ### Contratos do Agente
-
 ```typescript
 // Entrada
 interface SendMessageDTO {
@@ -215,7 +211,6 @@ interface AgentResponse {
 ## 🧪 Testes
 
 Testes unitários com **Vitest**.
-
 ```bash
 # rodar testes
 pnpm --filter api test
@@ -267,7 +262,6 @@ Inputs do usuário são sanitizados antes de chegar ao agente, removendo tags e 
 ## 🚀 Como executar o projeto
 
 ### 1️⃣ Instalar dependências
-
 ```bash
 pnpm install
 ```
@@ -287,7 +281,6 @@ VITE_API_KEY=sua-chave-secreta-aqui
 ```
 
 ### 3️⃣ Rodar backend
-
 ```bash
 pnpm --filter api dev
 ```
@@ -295,12 +288,68 @@ pnpm --filter api dev
 API disponível em `http://localhost:3000`
 
 ### 4️⃣ Rodar frontend
-
 ```bash
 pnpm --filter web dev
 ```
 
 Frontend disponível em `http://localhost:5173`
+
+---
+
+## 🐳 Deploy com Docker
+
+A aplicação é containerizada com **multi-stage builds** para API e frontend. O banco SQLite persiste em um volume Docker nomeado, sobrevivendo a restarts e rebuilds.
+
+### Arquitetura dos containers
+```
+Nginx (host)
+   ↓ proxy_pass
+Container web (nginx:alpine) → porta 3001
+   ↓ proxy /api
+Container api (node:alpine) → porta 3000 (interna)
+   ↓
+Volume sqlite_data → /app/data/db.sqlite
+```
+
+### Pré-requisitos
+
+* Docker e Docker Compose instalados
+* Variáveis de ambiente configuradas
+
+### 1️⃣ Configurar variáveis de ambiente
+```bash
+# API
+cp apps/api/.env.example apps/api/.env
+
+# Frontend
+cp apps/web/.env.example apps/web/.env
+
+# Raiz — necessário para o build do Vite no Docker
+echo "VITE_API_KEY=sua-chave-secreta-aqui" > .env
+```
+
+### 2️⃣ Subir os containers
+```bash
+docker compose up -d --build
+```
+
+### 3️⃣ Verificar
+```bash
+docker compose ps
+curl http://localhost:3001/api/health
+```
+
+### Atualizar em produção
+```bash
+git pull
+docker compose up -d --build
+```
+
+### Logs
+```bash
+docker compose logs -f api
+docker compose logs -f web
+```
 
 ---
 
@@ -313,7 +362,6 @@ Frontend disponível em `http://localhost:5173`
 | GET    | /messages       | Retorna histórico de uma conversa      |
 
 ### POST /messages
-
 ```json
 // Request
 {
@@ -330,7 +378,6 @@ Frontend disponível em `http://localhost:5173`
 ```
 
 ### GET /messages?conversationId=xxx
-
 ```json
 [
   { "id": 1, "role": "user", "content": "Olá", "created_at": "..." },
@@ -383,6 +430,9 @@ O `ChatService` recebe repositories e agente pelo construtor, facilitando testes
 ### Contexto limitado a 4 mensagens
 Modelos menores perdem coerência com histórico longo. O `formatHistory` envia apenas as últimas 4 mensagens ao agente, garantindo respostas consistentes sem alucinações.
 
+### Docker multi-stage build
+Builds separados por estágio (deps → builder → runner) reduzem o tamanho final da imagem, excluindo devDependencies e código fonte do artefato de produção.
+
 ---
 
 ## ✅ Status Atual
@@ -406,4 +456,4 @@ Modelos menores perdem coerência com histórico longo. O `formatHistory` envia 
 * [x] Rate limiting (10 req/min por IP)
 * [x] Autenticação por API key
 * [x] Proteção contra prompt injection
-* [ ] Docker
+* [x] Docker

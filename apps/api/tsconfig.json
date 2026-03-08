@@ -8,12 +8,14 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "types": [],
+    "typeRoots": ["./node_modules/@types", "../../node_modules/@types"],
     "paths": {
       "@repo/shared": ["../../packages/shared/src"],
       "@/*": ["./src/*", "../../packages/shared/src/*"]
-    },
+    }
   },
   "references": [
     { "path": "../../packages/shared" }
-  ],
+  ]
 }

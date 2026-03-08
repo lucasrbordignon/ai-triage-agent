@@ -24,8 +24,12 @@ COPY apps/api/package.json ./apps/api/
 
 RUN pnpm install --frozen-lockfile --prod
 
-COPY --from=builder /app/packages/shared ./packages/shared
+COPY --from=builder /app/packages/shared/dist ./node_modules/@repo/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./node_modules/@repo/shared/package.json
+
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
+
+RUN ln -s /app/node_modules/@repo/shared/dist /app/node_modules/@repo/shared/src
 
 WORKDIR /app/apps/api
 
